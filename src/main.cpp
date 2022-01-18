@@ -44,7 +44,7 @@ int BRIGHT_LEVEL = 255;
  */
  
 /* Includes */
-#include <ESP8266WiFi.h>
+#include <ESP8266WiFiMulti.h>
 #include <WiFiUdp.h>
 #include <Timezone.h>
 #include <Adafruit_NeoPixel.h>
@@ -90,6 +90,8 @@ const int NTP_PACKET_SIZE = 48; // NTP time stamp is in the first 48 bytes of th
 byte packetBuffer[ NTP_PACKET_SIZE]; //buffer to hold incoming and outgoing packets
 // A UDP instance to let us send and receive packets over UDP
 WiFiUDP udp;
+// Declare object for multi WiFi access point connection
+ESP8266WiFiMulti wifiMulti;
 
 //Timezone stuff for central time
 //https://github.com/JChristensen/Timezone/blob/master/examples/Clock/Clock.ino
@@ -122,48 +124,20 @@ void setup() {
      would try to act as both a client and an access-point and could cause
      network-issues with your other WiFi-devices on your WiFi-network. */
   WiFi.mode(WIFI_STA);
+  
+  wifiMulti.addAP(STASSID1, STAPSK1);
+  wifiMulti.addAP(STASSID2, STAPSK2);
 
-  uint8_t connection_count = 0;
-  while (connected_ap == 255) {
-    // Loop through two different sets of AP credentials until we get connected to one
-    if (connected_ap == 255) {
-      WiFi.disconnect();
-      connection_count = 0;
-      Serial.print("\nConnecting to ");
-      Serial.println(STASSID1);
-      WiFi.begin(STASSID1, STAPSK1);
-      
-      while (++connection_count < 20) {
-        if (WiFi.status() == WL_CONNECTED) {
-          WiFi.hostname("Okay-to-Wake");
-          connected_ap = 1;
-          break;
-        }
-        else {
-          delay(500);
-          Serial.print(".");
-        }
-      }
+  bool trying_to_connect = true;
+  Serial.print("\nConnecting to WiFi...");
+
+  while (trying_to_connect) {
+    if (wifiMulti.run(10000) == WL_CONNECTED) {
+      WiFi.hostname("Okay-to-Wake");
+      trying_to_connect = false;
     }
-
-    if (connected_ap == 255) {
-      WiFi.disconnect();
-      connection_count = 0;
-      Serial.print("\nConnecting to ");
-      Serial.println(STASSID2);
-      WiFi.begin(STASSID2, STAPSK2);
-      
-      while (++connection_count < 20) {
-        if (WiFi.status() == WL_CONNECTED) {
-          WiFi.hostname("Okay-to-Wake");
-          connected_ap = 2;
-          break;
-        }
-        else {
-          delay(500);
-          Serial.print(".");
-        }
-      }
+    else {
+      Serial.print(".");
     }
   }
 
@@ -216,7 +190,7 @@ void loop() {
   }
   setTime(myUTC);
 
-  char wifi_state = 1;
+  char wifi_state = true;
   
   while(1) {
     if (wifi_state) {
@@ -224,7 +198,7 @@ void loop() {
       if (millis() > (unsigned long)(MINUTES_BEFORE_WIFI_SHUTOFF*60*1000)) {
         //Shutoff WiFi after X minutes. Leaves a window for OTA update after power cycling
         WiFi.forceSleepBegin();
-        wifi_state = 0;
+        wifi_state = false;
       }
     }
 
