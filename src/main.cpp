@@ -105,8 +105,6 @@ TimeChangeRule PACIFIC_STD = {"EST", First, Sun, Nov, 2, -480};     // Standard 
 Timezone myTZ(CENTRAL_DST,CENTRAL_STD);
 TimeChangeRule *tcr;        // pointer to the time change rule, use to get TZ abbrev
 
-uint8_t connected_ap = 255; // Set based on what AP this connects to. Used to set correct timezone
-
 void setup() {
   Serial.begin(115200);
  
@@ -152,7 +150,7 @@ void setup() {
   Serial.println(udp.localPort());
 
   // The second AP is in the Eastern time zone (for visiting family)
-  if (connected_ap == 2) myTZ.setRules(EASTERN_DST,EASTERN_STD);
+  if (WiFi.SSID() == STASSID2) myTZ.setRules(EASTERN_DST,EASTERN_STD);
   setTime(myTZ.toUTC(compileTime()));
 
   ArduinoOTA.onStart([]() {
