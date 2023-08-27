@@ -54,17 +54,11 @@ extern "C" {
 #define LED_PIN    12
 #define LED_COUNT 3
 
-/* State machine definitions */
-#define DAY   0
-#define SLEEP 1
-#define DOZE  2
-#define WAKE  3
-
 const uint32_t state_colors[5] = {
-  ((uint32_t)0x00 << 16) | ((uint32_t)0x00 <<  8) | 0x00, //Daytime color
-  ((uint32_t)0xFF << 16) | ((uint32_t)0x00 <<  8) | 0x00, //Sleep color
   ((uint32_t)0x00 << 16) | ((uint32_t)0x00 <<  8) | 0xFF, //Doze color
   ((uint32_t)0x00 << 16) | ((uint32_t)0xFF <<  8) | 0x00, //Wake color
+  ((uint32_t)0x00 << 16) | ((uint32_t)0x00 <<  8) | 0x00, //Daytime color
+  ((uint32_t)0xFF << 16) | ((uint32_t)0x00 <<  8) | 0x00, //Sleep color
   ((uint32_t)0x52 << 16) | ((uint32_t)0x52 <<  8) | 0x52  //Boot color
 };
 
@@ -191,7 +185,7 @@ int convert_weekday_start(time_t timestamp) {
 }
 
 void loop() {
-  uint8_t state = DAY;
+  uint8_t state = E_DAY;
   change_lights(state);
 
   unsigned long myUTC;
@@ -205,7 +199,8 @@ void loop() {
   }
   setTime(myUTC);
 
-  Serial.println("OTA success!");
+  /* Get schedule from home server */
+  Serial.println("Checking server for schedule:");
   WiFiClient client;
   HTTPClient http;
   Serial.println(SCHEDULE_SERVER_PATH);
@@ -255,42 +250,42 @@ void loop() {
 
     int doze = sched_to_big_time(day_num, E_DOZE);
     int wake = sched_to_big_time(day_num, E_WAKE);
-    int day = sched_to_big_time(day_num, E_OFF);
+    int day = sched_to_big_time(day_num, E_DAY);
     int sleep = sched_to_big_time(day_num, E_SLEEP);
 
     //Day = <Sleep and >Day
-    //FIXME: This assumes SLEEP will start at night and not in the early morning (eg: 00:12 for 12:12am would trip this up)
+    //FIXME: This assumes E_SLEEP will start at night and not in the early morning (eg: 00:12 for 12:12am would trip this up)
     if ((rn >= day) && (rn < sleep)) {
-      if (state != DAY) {
-        state = DAY;
+      if (state != E_DAY) {
+        state = E_DAY;
         change_lights(state);
       }
     }
     //Doze = <Wake and >=Doze
     else if ((rn >= doze) && (rn < wake)) {
-      if (state != DOZE) {
-        state = DOZE;
+      if (state != E_DOZE) {
+        state = E_DOZE;
         change_lights(state);
       }
     }
 
     //Wake = <Day and >=Wake
     else if ((rn >= wake) && (rn < day)) {
-      if (state != WAKE) {
-        state = WAKE;
+      if (state != E_WAKE) {
+        state = E_WAKE;
         change_lights(state);
       }
     }
     //Sleep = <Doze and >=Sleep
     else if ((rn >= sleep) || (rn < doze)) {
-      if (state != SLEEP) {
-        state = SLEEP;
+      if (state != E_SLEEP) {
+        state = E_SLEEP;
         change_lights(state);
       }
     }
 
     Serial.print("state = ");
-    Serial.println(state);
+    Serial.println(get_event_str(state));
     // wait ten seconds before asking for the time again
     delay(10000);
   }

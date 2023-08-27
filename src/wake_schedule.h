@@ -12,7 +12,7 @@ struct otw_time {
 struct otw_day {
 	struct otw_time doze;
 	struct otw_time wake;
-	struct otw_time off;
+	struct otw_time day;
 	struct otw_time sleep;
 };
 
@@ -28,11 +28,17 @@ struct otw_day {
 enum sched_events { 
     E_DOZE,
     E_WAKE,
-    E_OFF,
-    E_SLEEP
+    E_DAY,
+    E_SLEEP,
+    E_UNKNOWN,
+    E_MAX
 };
 
-extern struct otw_day otw_week_schedule[7];
+#define DOZE_STR "Doze"
+#define WAKE_STR "Wake"
+#define DAY_STR "Day"
+#define SLEEP_STR "Sleep"
+#define UNKNOWN_STR "State Out-of-Bounds"
 
 int parse_schedule(const char *payload, uint16_t len);
 void use_default_week(void);
