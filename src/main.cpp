@@ -23,12 +23,7 @@
 *     Access point #2: STASSID2, STAPSK2
 */
 
-
-/* User timer settings: { hours, minutes } */
-int SLEEP_TIME[2] = { 18, 45 };
-int DOZE_TIME[2] = { 6, 15 };
-int WAKE_TIME[2] = { 6, 30 };
-int DAY_TIME[2] = { 7, 30 };
+/* Default timer settings are found in wake_schedule.c */
 
 //How many minutes to leave WiFi on after power-up for purposes of over-the-air-updates
 int MINUTES_BEFORE_WIFI_SHUTOFF = 10;
@@ -42,14 +37,19 @@ int BRIGHT_LEVEL = 255;
  * Time (install as a dependency of Timezone)
  * Adafruit NeoPixel
  */
- 
+
 /* Includes */
 #include <ESP8266WiFiMulti.h>
 #include <WiFiUdp.h>
 #include <Timezone.h>
 #include <Adafruit_NeoPixel.h>
 #include <ArduinoOTA.h>
+#include <ESP8266HTTPClient.h>
 #include "credentials.h"
+
+extern "C" {
+  #include "wake_schedule.h"
+}
 
 #define LED_PIN    12
 #define LED_COUNT 3
@@ -107,7 +107,7 @@ TimeChangeRule *tcr;        // pointer to the time change rule, use to get TZ ab
 
 void setup() {
   Serial.begin(115200);
- 
+
   strip.begin();           // INITIALIZE NeoPixel strip object (REQUIRED)
   for (uint8_t i=0; i<LED_COUNT; i++) strip.setPixelColor(i,state_colors[4]);
   strip.show();            // Turn OFF all pixels ASAP
@@ -122,7 +122,7 @@ void setup() {
      would try to act as both a client and an access-point and could cause
      network-issues with your other WiFi-devices on your WiFi-network. */
   WiFi.mode(WIFI_STA);
-  
+
   wifiMulti.addAP(STASSID1, STAPSK1);
   wifiMulti.addAP(STASSID2, STAPSK2);
 
@@ -173,6 +173,23 @@ void setup() {
   ArduinoOTA.begin();
 }
 
+
+/** @brief Return the number corresponding to the day of the week with 0
+ * indicating Monday and 6 indicating Sunday.
+ *
+ * By default, Arduino's Time library returns the day of the week as [1..7]
+ * beginning with Sunday. This function takes that value as an input and
+ * converts it to [0..6] beginning with Monday.
+ *
+ * @param timestamp: time_t from which the day of the week will be retrieved
+ *
+ * @return int in range [0..6]
+ */
+
+int convert_weekday_start(time_t timestamp) {
+  return (weekday(timestamp)+5)%7;
+}
+
 void loop() {
   uint8_t state = DAY;
   change_lights(state);
@@ -188,8 +205,30 @@ void loop() {
   }
   setTime(myUTC);
 
+  Serial.println("OTA success!");
+  WiFiClient client;
+  HTTPClient http;
+  Serial.println(SCHEDULE_SERVER_PATH);
+  http.begin(client, SCHEDULE_SERVER_PATH);
+  int httpResponseCode = http.GET();
+  Serial.print("response code:");
+  Serial.println(httpResponseCode);
+  if (httpResponseCode == 200) {
+    String payload = http.getString();
+    Serial.println(payload);
+
+    const char *sched = payload.c_str();
+
+    int err = parse_schedule(sched, strlen(sched));
+    if (err) {
+      printf("Using default schedule\n");
+      use_default_week();
+    }
+    print_schedule();
+  }
+
   char wifi_state = true;
-  
+
   while(1) {
     if (wifi_state) {
       ArduinoOTA.handle();
@@ -210,33 +249,40 @@ void loop() {
     int rn = big_time(rightNow);
     Serial.print("rightNow = ");
     Serial.println(rn);
-    
+
+    // Convert 1-7 (sun-sat) to 0-6 (mon-sun)
+    int day_num = convert_weekday_start(local);
+
+    int doze = sched_to_big_time(day_num, E_DOZE);
+    int wake = sched_to_big_time(day_num, E_WAKE);
+    int day = sched_to_big_time(day_num, E_OFF);
+    int sleep = sched_to_big_time(day_num, E_SLEEP);
 
     //Day = <Sleep and >Day
     //FIXME: This assumes SLEEP will start at night and not in the early morning (eg: 00:12 for 12:12am would trip this up)
-    if ((rn >= big_time(DAY_TIME)) && (rn < big_time(SLEEP_TIME))) {
+    if ((rn >= day) && (rn < sleep)) {
       if (state != DAY) {
         state = DAY;
         change_lights(state);
       }
     }
     //Doze = <Wake and >=Doze
-    else if ((rn >= big_time(DOZE_TIME)) && (rn < big_time(WAKE_TIME))) {
+    else if ((rn >= doze) && (rn < wake)) {
       if (state != DOZE) {
         state = DOZE;
         change_lights(state);
       }
     }
-    
+
     //Wake = <Day and >=Wake
-    else if ((rn >= big_time(WAKE_TIME)) && (rn < big_time(DAY_TIME))) {
+    else if ((rn >= wake) && (rn < day)) {
       if (state != WAKE) {
         state = WAKE;
         change_lights(state);
       }
     }
     //Sleep = <Doze and >=Sleep
-    else if ((rn >= big_time(SLEEP_TIME)) || (rn < big_time(DOZE_TIME))) {
+    else if ((rn >= sleep) || (rn < doze)) {
       if (state != SLEEP) {
         state = SLEEP;
         change_lights(state);
@@ -266,7 +312,7 @@ unsigned long getUTC(void) {
   sendNTPpacket(timeServerIP); // send an NTP packet to a time server
   // wait to see if a reply is available
   delay(1000);
-  
+
   int cb = udp.parsePacket();
   if (!cb) {
     Serial.println("no packet yet");
