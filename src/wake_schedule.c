@@ -8,14 +8,22 @@ char payload[] = "# Start with Monday\n# Format: blue, green, off, red\n# exampl
 
 struct otw_day otw_week_schedule[7];
 
+const char *otw_event_str[E_MAX] = {
+    DOZE_STR,
+    WAKE_STR,
+    DAY_STR,
+    SLEEP_STR,
+    UNKNOWN_STR
+};
+
 void use_default_week(void) {
 	for (uint8_t i = 0; i<7; i++) {
 		otw_week_schedule[i].doze.hour = DEFAULT_DOZE_H;
 		otw_week_schedule[i].doze.minute = DEFAULT_DOZE_M;
 		otw_week_schedule[i].wake.hour = DEFAULT_WAKE_H;
 		otw_week_schedule[i].wake.minute = DEFAULT_WAKE_M;
-		otw_week_schedule[i].off.hour = DEFAULT_OFF_H;
-		otw_week_schedule[i].off.minute = DEFAULT_OFF_M;
+		otw_week_schedule[i].day.hour = DEFAULT_OFF_H;
+		otw_week_schedule[i].day.minute = DEFAULT_OFF_M;
 		otw_week_schedule[i].sleep.hour = DEFAULT_SLEEP_H;
 		otw_week_schedule[i].sleep.minute = DEFAULT_SLEEP_M;
 	}
@@ -53,7 +61,7 @@ void print_schedule(void) {
 		       weekdays[i],
 		       otw_week_schedule[i].doze.hour, otw_week_schedule[i].doze.minute,
 		       otw_week_schedule[i].wake.hour, otw_week_schedule[i].wake.minute,
-		       otw_week_schedule[i].off.hour, otw_week_schedule[i].off.minute,
+		       otw_week_schedule[i].day.hour, otw_week_schedule[i].day.minute,
 		       otw_week_schedule[i].sleep.hour, otw_week_schedule[i].sleep.minute
 		       );
 	}
@@ -73,8 +81,8 @@ void set_event(uint8_t day, uint8_t event, uint8_t hour, uint8_t minute) {
 			break;
 
 		case 2:
-			otw_week_schedule[day].off.hour = hour;
-			otw_week_schedule[day].off.minute = minute;
+			otw_week_schedule[day].day.hour = hour;
+			otw_week_schedule[day].day.minute = minute;
 			break;
 
 		case 3:
@@ -131,7 +139,7 @@ int parse_schedule(const char *payload, uint16_t len) {
 				if (decoded_minutes < 0) {
 					return -1;
 				}
-					set_event(line, event, decoded_hours, decoded_minutes);
+				set_event(line, event, decoded_hours, decoded_minutes);
 				if (event == 3) {
 					line++;
 					event = 0;
@@ -178,13 +186,24 @@ int sched_to_big_time(int day, enum sched_events ev)
         return (otw_week_schedule[day].wake.hour*60) + otw_week_schedule[day].wake.minute;
         break;
 
-    case E_OFF:
-        return (otw_week_schedule[day].off.hour*60) + otw_week_schedule[day].off.minute;
+    case E_DAY:
+        return (otw_week_schedule[day].day.hour*60) + otw_week_schedule[day].day.minute;
         break;
 
     case E_SLEEP:
         return (otw_week_schedule[day].sleep.hour*60) + otw_week_schedule[day].sleep.minute;
         break;
+    default:
+        //FIXME: This should never happen, but if it does it's an unhandled exception
+        return -1;
   };
   return 0;
+}
+
+const char *get_event_str(uint8_t idx) {
+    if (idx >= E_MAX) {
+        return otw_event_str[E_UNKNOWN];
+    }
+
+    return otw_event_str[idx];
 }
