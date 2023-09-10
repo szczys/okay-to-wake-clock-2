@@ -16,6 +16,11 @@ struct otw_day {
 	struct otw_time sleep;
 };
 
+struct otw_week {
+    struct otw_day day[7];
+    uint32_t crc;
+};
+
 #define DEFAULT_DOZE_H 6
 #define DEFAULT_DOZE_M 15
 #define DEFAULT_WAKE_H 6
@@ -40,8 +45,12 @@ enum sched_events {
 #define SLEEP_STR "Sleep"
 #define UNKNOWN_STR "State Out-of-Bounds"
 
-int parse_schedule(const char *payload, uint16_t len);
-void use_default_week(void);
+int parse_schedule(struct otw_week *w, const char *payload, uint16_t len);
+int ingest_schedule(const char *payload, uint16_t len);
+void use_default_week(struct otw_week *sched);
+void print_schedule_struct(struct otw_week *w);
 void print_schedule(void);
-int sched_to_big_time(int day, enum sched_events);
+int sched_to_big_time(int day, enum sched_events ev);
 const char *get_event_str(uint8_t idx);
+void otw_init(void);
+void load_from_eeprom(struct otw_week *w);
