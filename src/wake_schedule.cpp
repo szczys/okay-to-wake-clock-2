@@ -1,12 +1,15 @@
+#include <Arduino.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+#include <EEPROM.h>
+#include <CRC32.h>
 #include "wake_schedule.h"
 
 char payload[] = "# Start with Monday\n# Format: blue, green, off, red\n# example: 0600|0615|0645|0700\n0600|0615|0645|0700\n0600|0615|0645|0700\n0600|0615|0645|0700\n0600|0615|0645|0700\n0600|0615|0645|0700\n0615|0630|0700|1900\n0615|0630|0700|1900";
 
-struct otw_day otw_week_schedule[7];
+struct otw_week _otw_week_schedule;
 
 const char *otw_event_str[E_MAX] = {
     DOZE_STR,
@@ -16,17 +19,47 @@ const char *otw_event_str[E_MAX] = {
     UNKNOWN_STR
 };
 
-void use_default_week(void) {
-	for (uint8_t i = 0; i<7; i++) {
-		otw_week_schedule[i].doze.hour = DEFAULT_DOZE_H;
-		otw_week_schedule[i].doze.minute = DEFAULT_DOZE_M;
-		otw_week_schedule[i].wake.hour = DEFAULT_WAKE_H;
-		otw_week_schedule[i].wake.minute = DEFAULT_WAKE_M;
-		otw_week_schedule[i].day.hour = DEFAULT_OFF_H;
-		otw_week_schedule[i].day.minute = DEFAULT_OFF_M;
-		otw_week_schedule[i].sleep.hour = DEFAULT_SLEEP_H;
-		otw_week_schedule[i].sleep.minute = DEFAULT_SLEEP_M;
+void write_week_to_eeprom(struct otw_week *w) {
+	EEPROM.put(0, *w);
+	EEPROM.commit();
+}
+
+uint32_t calc_week_crc(struct otw_week *w) {
+	return CRC32::calculate((uint8_t *)&(w->day), sizeof(w->day));
+}
+
+void load_from_eeprom(struct otw_week *w) {
+	EEPROM.begin(64);
+	EEPROM.get(0, *w);
+	uint32_t crc = calc_week_crc(w);
+
+	if (crc != w->crc) {
+		Serial.println("CRC mismatch, restoring default schedule in EEPROM");
+		use_default_week(w);
+		write_week_to_eeprom(w);
+	} else {
+		Serial.println("Loaded schedule from EEPROM");
 	}
+	print_schedule_struct(w);
+}
+
+void otw_init(void) {
+	load_from_eeprom(&_otw_week_schedule);
+}
+
+void use_default_week(struct otw_week *sched) {
+	for (uint8_t i = 0; i<7; i++) {
+		sched->day[i].doze.hour = DEFAULT_DOZE_H;
+		sched->day[i].doze.minute = DEFAULT_DOZE_M;
+		sched->day[i].wake.hour = DEFAULT_WAKE_H;
+		sched->day[i].wake.minute = DEFAULT_WAKE_M;
+		sched->day[i].day.hour = DEFAULT_OFF_H;
+		sched->day[i].day.minute = DEFAULT_OFF_M;
+		sched->day[i].sleep.hour = DEFAULT_SLEEP_H;
+		sched->day[i].sleep.minute = DEFAULT_SLEEP_M;
+	}
+
+	sched->crc = calc_week_crc(sched);
 }
 
 int validate_time(char tens, char ones, uint8_t max) {
@@ -50,44 +83,48 @@ int validate_time(char tens, char ones, uint8_t max) {
 #define SAT "Sat"
 #define SUN "Sun"
 
-char *weekdays[7] = { MON, TUE, WED, THU, FRI, SAT, SUN };
+const char *weekdays[7] = { MON, TUE, WED, THU, FRI, SAT, SUN };
 
-void print_schedule(void) {
+void print_schedule_struct(struct otw_week *w) {
     char msg_buf[64*7] = { 0 };
 	for (uint8_t i = 0; i<7; i++) {
         uint16_t str_start = strlen(msg_buf);
 		snprintf(msg_buf + str_start, sizeof(msg_buf)-str_start,
                "%s: Doze->%02d:%02d Wake->%02d:%02d Off->%02d:%02d Sleep->%02d:%02d\n",
 		       weekdays[i],
-		       otw_week_schedule[i].doze.hour, otw_week_schedule[i].doze.minute,
-		       otw_week_schedule[i].wake.hour, otw_week_schedule[i].wake.minute,
-		       otw_week_schedule[i].day.hour, otw_week_schedule[i].day.minute,
-		       otw_week_schedule[i].sleep.hour, otw_week_schedule[i].sleep.minute
+		       w->day[i].doze.hour, w->day[i].doze.minute,
+		       w->day[i].wake.hour, w->day[i].wake.minute,
+		       w->day[i].day.hour, w->day[i].day.minute,
+		       w->day[i].sleep.hour, w->day[i].sleep.minute
 		       );
 	}
-    my_log(msg_buf);
+    Serial.println(msg_buf);
 }
 
-void set_event(uint8_t day, uint8_t event, uint8_t hour, uint8_t minute) {
+void print_schedule(void) {
+	print_schedule_struct(&_otw_week_schedule);
+}
+
+void set_event(struct otw_week *w, uint8_t day, uint8_t event, uint8_t hour, uint8_t minute) {
 	switch(event) {
 		case 0:
-			otw_week_schedule[day].doze.hour = hour;
-			otw_week_schedule[day].doze.minute = minute;
+			w->day[day].doze.hour = hour;
+			w->day[day].doze.minute = minute;
 			break;
 
 		case 1:
-			otw_week_schedule[day].wake.hour = hour;
-			otw_week_schedule[day].wake.minute = minute;
+			w->day[day].wake.hour = hour;
+			w->day[day].wake.minute = minute;
 			break;
 
 		case 2:
-			otw_week_schedule[day].day.hour = hour;
-			otw_week_schedule[day].day.minute = minute;
+			w->day[day].day.hour = hour;
+			w->day[day].day.minute = minute;
 			break;
 
 		case 3:
-			otw_week_schedule[day].sleep.hour = hour;
-			otw_week_schedule[day].sleep.minute = minute;
+			w->day[day].sleep.hour = hour;
+			w->day[day].sleep.minute = minute;
 			break;
 
 		default:
@@ -95,7 +132,7 @@ void set_event(uint8_t day, uint8_t event, uint8_t hour, uint8_t minute) {
 	}
 }
 
-int parse_schedule(const char *payload, uint16_t len) {
+int parse_schedule(struct otw_week *w, const char *payload, uint16_t len) {
 	int16_t i = -1;
 
 	uint8_t line = 0;
@@ -139,7 +176,7 @@ int parse_schedule(const char *payload, uint16_t len) {
 				if (decoded_minutes < 0) {
 					return -1;
 				}
-				set_event(line, event, decoded_hours, decoded_minutes);
+				set_event(w, line, event, decoded_hours, decoded_minutes);
 				if (event == 3) {
 					line++;
 					event = 0;
@@ -164,14 +201,35 @@ int parse_schedule(const char *payload, uint16_t len) {
         
 	}
 
-    if (line == 7) {
-        my_log("Successfully processed 7 lines");
-    } else {
+    if (line != 7) {
         char sbuf[64];
         snprintf(sbuf, sizeof(sbuf), "Error processing scheule. Expected 7 lines but got %d.", line);
-        my_log(sbuf);
+        Serial.println(sbuf);
         return -1;
     }
+
+	Serial.println("Successfully processed 7 lines");
+	return 0;
+}
+
+int ingest_schedule(const char *payload, uint16_t len)
+{
+	struct otw_week new_week;
+	int err = parse_schedule(&new_week, payload, len);
+	
+	if (err) {
+		return err;
+	}
+		
+	new_week.crc = calc_week_crc(&new_week);
+	if (new_week.crc != _otw_week_schedule.crc) {
+		Serial.println("Saving new schedule to EEPROM");
+		write_week_to_eeprom(&new_week);	
+		load_from_eeprom(&_otw_week_schedule);
+	} else {
+		Serial.println("Received schedule matches stored schedule.");
+	}
+
 	return 0;
 }
 
@@ -179,19 +237,19 @@ int sched_to_big_time(int day, enum sched_events ev)
 {
   switch(ev) {
     case E_DOZE:
-        return (otw_week_schedule[day].doze.hour*60) + otw_week_schedule[day].doze.minute;
+        return (_otw_week_schedule.day[day].doze.hour*60) + _otw_week_schedule.day[day].doze.minute;
         break;
 
     case E_WAKE:
-        return (otw_week_schedule[day].wake.hour*60) + otw_week_schedule[day].wake.minute;
+        return (_otw_week_schedule.day[day].wake.hour*60) + _otw_week_schedule.day[day].wake.minute;
         break;
 
     case E_DAY:
-        return (otw_week_schedule[day].day.hour*60) + otw_week_schedule[day].day.minute;
+        return (_otw_week_schedule.day[day].day.hour*60) + _otw_week_schedule.day[day].day.minute;
         break;
 
     case E_SLEEP:
-        return (otw_week_schedule[day].sleep.hour*60) + otw_week_schedule[day].sleep.minute;
+        return (_otw_week_schedule.day[day].sleep.hour*60) + _otw_week_schedule.day[day].sleep.minute;
         break;
     default:
         //FIXME: This should never happen, but if it does it's an unhandled exception

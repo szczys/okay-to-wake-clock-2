@@ -47,9 +47,7 @@ int BRIGHT_LEVEL = 255;
 #include <ESP8266HTTPClient.h>
 #include "credentials.h"
 
-extern "C" {
-  #include "wake_schedule.h"
-}
+#include "wake_schedule.h"
 
 #define LED_PIN    12
 #define LED_COUNT 3
@@ -143,6 +141,8 @@ void setup() {
   Serial.print("Local port: ");
   Serial.println(udp.localPort());
 
+  otw_init();
+
   // The second AP is in the Eastern time zone (for visiting family)
   if (WiFi.SSID() == STASSID2) myTZ.setRules(EASTERN_DST,EASTERN_STD);
   setTime(myTZ.toUTC(compileTime()));
@@ -214,12 +214,10 @@ void loop() {
 
     const char *sched = payload.c_str();
 
-    int err = parse_schedule(sched, strlen(sched));
+    int err = ingest_schedule(sched, strlen(sched));
     if (err) {
-      printf("Using default schedule\n");
-      use_default_week();
+      printf("Error processing received schedule\n");
     }
-    print_schedule();
   }
 
   char wifi_state = true;
