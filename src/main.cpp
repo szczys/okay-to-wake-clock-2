@@ -70,9 +70,6 @@ void sendNTPpacket(IPAddress& address);
 
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
-const char* host = "https://hackaday.com";
-const uint16_t port = 80;
-
 //UDP stuff for NTP internet time lookup
 //https://www.geekstips.com/arduino-time-sync-ntp-server-esp8266-udp/
 unsigned int localPort = 2390;      // local port to listen for UDP packets
