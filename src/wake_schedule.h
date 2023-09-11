@@ -17,7 +17,7 @@ struct otw_day {
 };
 
 struct otw_week {
-    struct otw_day day[7];
+    struct otw_day dow[7];
     uint32_t crc;
 };
 
@@ -30,7 +30,7 @@ struct otw_week {
 #define DEFAULT_SLEEP_H 18
 #define DEFAULT_SLEEP_M 45
 
-enum sched_events { 
+enum sched_events {
     E_DOZE,
     E_WAKE,
     E_DAY,

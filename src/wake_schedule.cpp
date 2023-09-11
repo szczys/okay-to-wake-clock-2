@@ -25,7 +25,7 @@ void write_week_to_eeprom(struct otw_week *w) {
 }
 
 uint32_t calc_week_crc(struct otw_week *w) {
-	return CRC32::calculate((uint8_t *)&(w->day), sizeof(w->day));
+	return CRC32::calculate((uint8_t *)&(w->dow), sizeof(w->dow));
 }
 
 void load_from_eeprom(struct otw_week *w) {
@@ -49,14 +49,14 @@ void otw_init(void) {
 
 void use_default_week(struct otw_week *sched) {
 	for (uint8_t i = 0; i<7; i++) {
-		sched->day[i].doze.hour = DEFAULT_DOZE_H;
-		sched->day[i].doze.minute = DEFAULT_DOZE_M;
-		sched->day[i].wake.hour = DEFAULT_WAKE_H;
-		sched->day[i].wake.minute = DEFAULT_WAKE_M;
-		sched->day[i].day.hour = DEFAULT_OFF_H;
-		sched->day[i].day.minute = DEFAULT_OFF_M;
-		sched->day[i].sleep.hour = DEFAULT_SLEEP_H;
-		sched->day[i].sleep.minute = DEFAULT_SLEEP_M;
+		sched->dow[i].doze.hour = DEFAULT_DOZE_H;
+		sched->dow[i].doze.minute = DEFAULT_DOZE_M;
+		sched->dow[i].wake.hour = DEFAULT_WAKE_H;
+		sched->dow[i].wake.minute = DEFAULT_WAKE_M;
+		sched->dow[i].day.hour = DEFAULT_OFF_H;
+		sched->dow[i].day.minute = DEFAULT_OFF_M;
+		sched->dow[i].sleep.hour = DEFAULT_SLEEP_H;
+		sched->dow[i].sleep.minute = DEFAULT_SLEEP_M;
 	}
 
 	sched->crc = calc_week_crc(sched);
@@ -92,10 +92,10 @@ void print_schedule_struct(struct otw_week *w) {
 		snprintf(msg_buf + str_start, sizeof(msg_buf)-str_start,
                "%s: Doze->%02d:%02d Wake->%02d:%02d Off->%02d:%02d Sleep->%02d:%02d\n",
 		       weekdays[i],
-		       w->day[i].doze.hour, w->day[i].doze.minute,
-		       w->day[i].wake.hour, w->day[i].wake.minute,
-		       w->day[i].day.hour, w->day[i].day.minute,
-		       w->day[i].sleep.hour, w->day[i].sleep.minute
+		       w->dow[i].doze.hour, w->dow[i].doze.minute,
+		       w->dow[i].wake.hour, w->dow[i].wake.minute,
+		       w->dow[i].day.hour, w->dow[i].day.minute,
+		       w->dow[i].sleep.hour, w->dow[i].sleep.minute
 		       );
 	}
     Serial.println(msg_buf);
@@ -105,26 +105,26 @@ void print_schedule(void) {
 	print_schedule_struct(&_otw_week_schedule);
 }
 
-void set_event(struct otw_week *w, uint8_t day, uint8_t event, uint8_t hour, uint8_t minute) {
+void set_event(struct otw_week *w, uint8_t dow, uint8_t event, uint8_t hour, uint8_t minute) {
 	switch(event) {
 		case 0:
-			w->day[day].doze.hour = hour;
-			w->day[day].doze.minute = minute;
+			w->dow[dow].doze.hour = hour;
+			w->dow[dow].doze.minute = minute;
 			break;
 
 		case 1:
-			w->day[day].wake.hour = hour;
-			w->day[day].wake.minute = minute;
+			w->dow[dow].wake.hour = hour;
+			w->dow[dow].wake.minute = minute;
 			break;
 
 		case 2:
-			w->day[day].day.hour = hour;
-			w->day[day].day.minute = minute;
+			w->dow[dow].day.hour = hour;
+			w->dow[dow].day.minute = minute;
 			break;
 
 		case 3:
-			w->day[day].sleep.hour = hour;
-			w->day[day].sleep.minute = minute;
+			w->dow[dow].sleep.hour = hour;
+			w->dow[dow].sleep.minute = minute;
 			break;
 
 		default:
@@ -233,23 +233,23 @@ int ingest_schedule(const char *payload, uint16_t len)
 	return 0;
 }
 
-int sched_to_big_time(int day, enum sched_events ev)
+int sched_to_big_time(int dow, enum sched_events ev)
 {
   switch(ev) {
     case E_DOZE:
-        return (_otw_week_schedule.day[day].doze.hour*60) + _otw_week_schedule.day[day].doze.minute;
+        return (_otw_week_schedule.dow[dow].doze.hour*60) + _otw_week_schedule.dow[dow].doze.minute;
         break;
 
     case E_WAKE:
-        return (_otw_week_schedule.day[day].wake.hour*60) + _otw_week_schedule.day[day].wake.minute;
+        return (_otw_week_schedule.dow[dow].wake.hour*60) + _otw_week_schedule.dow[dow].wake.minute;
         break;
 
     case E_DAY:
-        return (_otw_week_schedule.day[day].day.hour*60) + _otw_week_schedule.day[day].day.minute;
+        return (_otw_week_schedule.dow[dow].day.hour*60) + _otw_week_schedule.dow[dow].day.minute;
         break;
 
     case E_SLEEP:
-        return (_otw_week_schedule.day[day].sleep.hour*60) + _otw_week_schedule.day[day].sleep.minute;
+        return (_otw_week_schedule.dow[dow].sleep.hour*60) + _otw_week_schedule.dow[dow].sleep.minute;
         break;
     default:
         //FIXME: This should never happen, but if it does it's an unhandled exception
