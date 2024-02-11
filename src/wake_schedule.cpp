@@ -5,6 +5,7 @@
 #include <string.h>
 #include <EEPROM.h>
 #include <CRC32.h>
+#include "cJSON.h"
 #include "wake_schedule.h"
 
 char payload[] = "# Start with Monday\n# Format: blue, green, off, red\n# example: 0600|0615|0645|0700\n0600|0615|0645|0700\n0600|0615|0645|0700\n0600|0615|0645|0700\n0600|0615|0645|0700\n0600|0615|0645|0700\n0615|0630|0700|1900\n0615|0630|0700|1900";
@@ -105,117 +106,70 @@ void print_schedule(void) {
 	print_schedule_struct(&_otw_week_schedule);
 }
 
-void set_event(struct otw_week *w, uint8_t dow, uint8_t event, uint8_t hour, uint8_t minute) {
-	switch(event) {
-		case 0:
-			w->dow[dow].doze.hour = hour;
-			w->dow[dow].doze.minute = minute;
-			break;
+// JSON keys
+#define JSON_MON "monday"
+#define JSON_TUE "tuesday"
+#define JSON_WED "wednesday"
+#define JSON_THU "thursday"
+#define JSON_FRI "friday"
+#define JSON_SAT "saturday"
+#define JSON_SUN "sunday"
+#define JSON_DOZE "doze"
+#define JSON_WAKE "wake"
+#define JSON_DAY "day"
+#define JSON_SLEEP "sleep"
+#define JSON_HOURS "hours"
+#define JSON_MINUTES "minutes"
 
-		case 1:
-			w->dow[dow].wake.hour = hour;
-			w->dow[dow].wake.minute = minute;
-			break;
+const char *json_week[7] = { JSON_MON, JSON_TUE, JSON_WED, JSON_THU, JSON_FRI, JSON_SAT, JSON_SUN };
+const char *json_event[4] = { JSON_DOZE, JSON_WAKE, JSON_DAY, JSON_SLEEP };
 
-		case 2:
-			w->dow[dow].day.hour = hour;
-			w->dow[dow].day.minute = minute;
-			break;
+int parse_schedule_json(struct otw_week *w, const char *payload, uint16_t len) {
+    cJSON *sched_json = cJSON_Parse(payload);
 
-		case 3:
-			w->dow[dow].sleep.hour = hour;
-			w->dow[dow].sleep.minute = minute;
-			break;
+    const cJSON *day;
+    const cJSON *event;
+    const cJSON *hour;
+    const cJSON *minute;
 
-		default:
-			return;
-	}
-}
-
-int parse_schedule(struct otw_week *w, const char *payload, uint16_t len) {
-	int16_t i = -1;
-
-	uint8_t line = 0;
-	uint8_t event = 0;
-	uint8_t time_idx = 0;
-	bool await_nl = false;
-
-	int8_t decoded_hours = 0;
-	int8_t decoded_minutes = 0;
-
-	while(true) {
-		i += 1;
-		if (i >= len) {
-			break;
-		}
-
-		// Currently parsing comment
-		if (await_nl) {
-			if (payload[i] == '\n') {
-				await_nl = false;
+	for (uint8_t d = 0; d < 7; d++) {
+		day = cJSON_GetObjectItemCaseSensitive(sched_json, json_week[d]);
+		for (uint8_t e = 0; e < 4; e++) {
+			otw_time *ts;
+			switch(e) {
+				case 0:
+					ts = &w->dow[d].doze;
+					break;
+				case 1:
+					ts = &w->dow[d].wake;
+					break;
+				case 2:
+					ts = &w->dow[d].day;
+					break;
+				case 3:
+					ts = &w->dow[d].sleep;
+					break;
+				default:
+					Serial.println("Failed to parse");
+					return -1;
 			}
-			continue;
-		}
 
-		// Filter for comment (starts with #)
-		if (payload[i] == '#') {
-			await_nl = true;
-			continue;
-		}
+			event = cJSON_GetObjectItemCaseSensitive(day, json_event[e]);
+			hour = cJSON_GetObjectItemCaseSensitive(event, JSON_HOURS);
+			minute = cJSON_GetObjectItemCaseSensitive(event, JSON_MINUTES);
 
-		switch(time_idx) {
-			case 1:
-				decoded_hours = validate_time(payload[i-1], payload[i], 23);
-				if (decoded_hours < 0) {
-					return -1;
-				}
-				time_idx++;
-				break;
-			case 3:
-				decoded_minutes = validate_time(payload[i-1], payload[i], 59);
-				if (decoded_minutes < 0) {
-					return -1;
-				}
-				set_event(w, line, event, decoded_hours, decoded_minutes);
-				if (event == 3) {
-					line++;
-					event = 0;
-					time_idx = 0;
-					await_nl = true;
-				} else {
-					time_idx++;
-				}
-				break;
-			case 4:
-				if (payload[i] == '|') {
-					time_idx = 0;
-					event++;
-				} else {
-					return -1;
-				}
-				break;
-			default:
-				time_idx++;
-				break;
+			ts->hour = hour->valueint;
+			ts->minute = minute->valueint;
 		}
-        
 	}
-
-    if (line != 7) {
-        char sbuf[64];
-        snprintf(sbuf, sizeof(sbuf), "Error processing scheule. Expected 7 lines but got %d.", line);
-        Serial.println(sbuf);
-        return -1;
-    }
-
-	Serial.println("Successfully processed 7 lines");
+	Serial.println("Successfully processed JSON schedule");
 	return 0;
 }
 
 int ingest_schedule(const char *payload, uint16_t len)
 {
 	struct otw_week new_week;
-	int err = parse_schedule(&new_week, payload, len);
+	int err = parse_schedule_json(&new_week, payload, len);
 	
 	if (err) {
 		return err;

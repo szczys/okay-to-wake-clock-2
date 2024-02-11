@@ -200,8 +200,8 @@ void loop() {
   Serial.println("Checking server for schedule:");
   WiFiClient client;
   HTTPClient http;
-  Serial.println(SCHEDULE_SERVER_PATH);
-  http.begin(client, SCHEDULE_SERVER_PATH);
+  Serial.println(SCHEDULE_SERVER_PATH_JSON);
+  http.begin(client, SCHEDULE_SERVER_PATH_JSON);
   int httpResponseCode = http.GET();
   Serial.print("response code:");
   Serial.println(httpResponseCode);
