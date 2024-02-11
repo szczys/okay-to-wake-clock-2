@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 
-#define SCHEDULE_SERVER_PATH "http://192.168.1.105/download/okay_to_wake.txt"
+#define SCHEDULE_SERVER_PATH_JSON "http://192.168.1.105/download/okay_to_wake.json"
 
 struct otw_time {
 	uint8_t hour;

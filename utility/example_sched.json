@@ -1,0 +1,128 @@
+{
+    "monday": {
+        "doze": {
+            "hours": 5,
+            "minutes": 45
+        },
+        "wake": {
+            "hours": 6,
+            "minutes": 0
+        },
+        "day": {
+            "hours": 6,
+            "minutes": 15
+        },
+        "sleep": {
+            "hours": 19,
+            "minutes": 15
+        }
+    },
+    "tuesday": {
+        "doze": {
+            "hours": 5,
+            "minutes": 45
+        },
+        "wake": {
+            "hours": 6,
+            "minutes": 0
+        },
+        "day": {
+            "hours": 6,
+            "minutes": 15
+        },
+        "sleep": {
+            "hours": 19,
+            "minutes": 15
+        }
+    },
+    "wednesday": {
+        "doze": {
+            "hours": 5,
+            "minutes": 45
+        },
+        "wake": {
+            "hours": 6,
+            "minutes": 0
+        },
+        "day": {
+            "hours": 6,
+            "minutes": 15
+        },
+        "sleep": {
+            "hours": 19,
+            "minutes": 0
+        }
+    },
+    "thursday": {
+        "doze": {
+            "hours": 6,
+            "minutes": 15
+        },
+        "wake": {
+            "hours": 6,
+            "minutes": 30
+        },
+        "day": {
+            "hours": 6,
+            "minutes": 45
+        },
+        "sleep": {
+            "hours": 19,
+            "minutes": 30
+        }
+    },
+    "friday": {
+        "doze": {
+            "hours": 6,
+            "minutes": 0
+        },
+        "wake": {
+            "hours": 6,
+            "minutes": 15
+        },
+        "day": {
+            "hours": 6,
+            "minutes": 30
+        },
+        "sleep": {
+            "hours": 19,
+            "minutes": 30
+        }
+    },
+    "saturday": {
+        "doze": {
+            "hours": 5,
+            "minutes": 45
+        },
+        "wake": {
+            "hours": 6,
+            "minutes": 0
+        },
+        "day": {
+            "hours": 6,
+            "minutes": 15
+        },
+        "sleep": {
+            "hours": 18,
+            "minutes": 0
+        }
+    },
+    "sunday": {
+        "doze": {
+            "hours": 6,
+            "minutes": 0
+        },
+        "wake": {
+            "hours": 6,
+            "minutes": 15
+        },
+        "day": {
+            "hours": 6,
+            "minutes": 30
+        },
+        "sleep": {
+            "hours": 20,
+            "minutes": 15
+        }
+    }
+}
