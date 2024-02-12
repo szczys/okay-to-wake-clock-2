@@ -26,7 +26,9 @@
 /* Default timer settings are found in wake_schedule.c */
 
 //How many minutes to leave WiFi on after power-up for purposes of over-the-air-updates
-int MINUTES_BEFORE_WIFI_SHUTOFF = 10;
+#define MINUTES_BEFORE_WIFI_SHUTOFF 10
+//How often to wake WiFi to check for schedule updates
+#define MINUTES_BETWEEN_WIFI_WAKES 60
 //LED Brightness (0-255)
 int BRIGHT_LEVEL = 255;
 
@@ -164,39 +166,7 @@ void setup() {
   ArduinoOTA.begin();
 }
 
-
-/** @brief Return the number corresponding to the day of the week with 0
- * indicating Monday and 6 indicating Sunday.
- *
- * By default, Arduino's Time library returns the day of the week as [1..7]
- * beginning with Sunday. This function takes that value as an input and
- * converts it to [0..6] beginning with Monday.
- *
- * @param timestamp: time_t from which the day of the week will be retrieved
- *
- * @return int in range [0..6]
- */
-
-int convert_weekday_start(time_t timestamp) {
-  return (weekday(timestamp)+5)%7;
-}
-
-void loop() {
-  uint8_t state = E_DAY;
-  change_lights(state);
-
-  unsigned long myUTC;
-  while (1) {
-    myUTC = getUTC();
-    if (myUTC == 0) {
-      delay(2000);
-      Serial.println("Retrying...");
-    }
-    else break;
-  }
-  setTime(myUTC);
-
-  /* Get schedule from home server */
+void check_for_new_schedule(void) {
   Serial.println("Checking server for schedule:");
   WiFiClient client;
   HTTPClient http;
@@ -216,17 +186,70 @@ void loop() {
       printf("Error processing received schedule\n");
     }
   }
+}
 
+/** @brief Return the number corresponding to the day of the week with 0
+ * indicating Monday and 6 indicating Sunday.
+ *
+ * By default, Arduino's Time library returns the day of the week as [1..7]
+ * beginning with Sunday. This function takes that value as an input and
+ * converts it to [0..6] beginning with Monday.
+ *
+ * @param timestamp: time_t from which the day of the week will be retrieved
+ *
+ * @return int in range [0..6]
+ */
+
+int convert_weekday_start(time_t timestamp) {
+  return (weekday(timestamp)+5)%7;
+}
+
+void minutes_in_future_to_ticks(uint32_t *future_ticks, int minutes_to_wait) {
+  *future_ticks =  millis() + ((uint32_t)(minutes_to_wait)*60*1000);
+}
+
+void loop() {
+  uint8_t state = E_DAY;
+  change_lights(state);
+
+  unsigned long myUTC;
+  while (1) {
+    myUTC = getUTC();
+    if (myUTC == 0) {
+      delay(2000);
+      Serial.println("Retrying...");
+    }
+    else break;
+  }
+  setTime(myUTC);
+
+  /* Get schedule from home server */
+  check_for_new_schedule();
+
+  uint32_t wifi_shutdown_target = 0;
+  uint32_t wifi_wake_target = 0;
   char wifi_state = true;
+
+  minutes_in_future_to_ticks(&wifi_shutdown_target, MINUTES_BEFORE_WIFI_SHUTOFF);
 
   while(1) {
     if (wifi_state) {
       ArduinoOTA.handle();
-      if (millis() > (unsigned long)(MINUTES_BEFORE_WIFI_SHUTOFF*60*1000)) {
+      if (millis() > wifi_shutdown_target) {
         //Shutoff WiFi after X minutes. Leaves a window for OTA update after power cycling
+        Serial.println("\nTurning WiFi off to save energy");
         WiFi.forceSleepBegin();
+        minutes_in_future_to_ticks(&wifi_wake_target, MINUTES_BETWEEN_WIFI_WAKES);
         wifi_state = false;
       }
+    } else if (millis() > wifi_wake_target) {
+        Serial.println("\nWaking WiFi to check for schedule changes");
+        WiFi.forceSleepWake();
+        WiFi.waitForConnectResult();
+        check_for_new_schedule();
+        Serial.println("\nTurning WiFi off to save energy");
+        WiFi.forceSleepBegin();
+        minutes_in_future_to_ticks(&wifi_wake_target, MINUTES_BETWEEN_WIFI_WAKES);
     }
 
     time_t utc = now();
@@ -249,7 +272,7 @@ void loop() {
     int sleep = sched_to_big_time(day_num, E_SLEEP);
 
     //Day = <Sleep and >Day
-    //FIXME: This assumes E_SLEEP will start at night and not in the early morning (eg: 00:12 for 12:12am would trip this up)
+    //FIXME: Ths assumes E_SLEEP will start at night and not in the early morning (eg: 00:12 for 12:12am would trip this up)
     if ((rn >= day) && (rn < sleep)) {
       if (state != E_DAY) {
         state = E_DAY;
